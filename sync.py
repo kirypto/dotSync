@@ -1,10 +1,12 @@
-import argparse
+import sys as _sys
+from argparse import HelpFormatter, OPTIONAL, ZERO_OR_MORE, SUPPRESS, ArgumentParser, Namespace
 from pathlib import Path
+from typing import NoReturn, Text, Any
 
 from _version import __version__
 
 
-class RawTextWithDefaultsHelpFormatter(argparse.HelpFormatter):
+class RawTextWithDefaultsHelpFormatter(HelpFormatter):
     """Help message formatter which adds default values to argument help and does not force specific newline positions.
     """
 
@@ -17,42 +19,67 @@ class RawTextWithDefaultsHelpFormatter(argparse.HelpFormatter):
         if action.required:
             arg_help += f"{prefix}<required>"
             return arg_help
-        if '%(default)' not in action.help and action.default is not argparse.SUPPRESS:
-            defaulting_nargs = [argparse.OPTIONAL, argparse.ZERO_OR_MORE]
+        if '%(default)' not in action.help and action.default is not SUPPRESS:
+            defaulting_nargs = [OPTIONAL, ZERO_OR_MORE]
             if action.option_strings or action.nargs in defaulting_nargs:
                 arg_help += f"{prefix}<default: %(default)s>"
         return arg_help
 
 
-def setup_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
+class UsageOnErrorArgumentParser(ArgumentParser):
+    def error(self, message: Text) -> NoReturn:
+        self.print_usage(_sys.stderr)
+        self.exit(2, f"!! ERROR {message}")
+
+    def parse_args(self, args: Any = None, namespace: Any = None) -> Namespace:
+        if len(_sys.argv) <= 1:
+            self.print_help()
+            exit(1)
+        return super().parse_args(args=args, namespace=namespace)
+
+
+def setup_args() -> Namespace:
+    parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
     parser.add_argument("-v", "--version", action="version", help="shows the version and exits",
                         version=f"%(prog)s {__version__}")
+    subparsers = parser.add_subparsers(title="File synchronization commands", required=True, dest="command")
 
-    subparsers = parser.add_subparsers(title="File synchronization commands")
-    subcommand_local = subparsers.add_parser("local", help="overwrites local dot files from the repository files")
-    subcommand_repo = subparsers.add_parser("repo", help="overwrites dot repository files from the local files")
-    subcommand_config = subparsers.add_parser("config", help=f"sets the configuration of {parser.prog}")
-    config_command_options = subcommand_config.add_mutually_exclusive_group(required=True)
-    config_command_options.add_argument("--location", type=Path, help="sets the local dot file directory path to synchronize")
-    config_command_options.add_argument("--foo", help="sets the local dot file location to sync")
+    local_command_parser = subparsers.add_parser(
+        "local",
+        help="update local dot files to match those from the corresponding files in the repository",
+        description="update local dot files to match those from the corresponding files in the repository",
+        usage=f"{parser.prog} local [--fileName FILENAME]",
+    )
+    local_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
 
-    # sync_command_group = parser.add_mutually_exclusive_group(required=True)
-    # sync_command_group.add_argument("local", required=False, help="overwrites local dot files from the repository files")
-    # sync_command_group.add_argument("repo", required=False, help="overwrites dot repository files from the local files")
+    repo_command_parser = subparsers.add_parser(
+        "repo",
+        help="update repository files to match those from the corresponding local dot files",
+        description="update repository files to match those from the corresponding local dot files",
+        usage=f"{parser.prog} repo [--fileName FILENAME]",
+    )
+    repo_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
 
-    import sys
-    if len(sys.argv) <= 1:
-        parser.print_help()
-        exit(1)
+    config_command_parser = subparsers.add_parser(
+        "config",
+        help=f"sets the configuration of {parser.prog}",
+        description=f"sets the configuration of {parser.prog}",
+        usage=f"{parser.prog} config [--location LOCATION]",
+    ).add_mutually_exclusive_group(required=True)
+    config_command_parser.add_argument("--location", type=to_path, help="sets the local dot file directory path to synchronize")
+
     return parser.parse_args()
 
 
+def to_path(path_str: str) -> Path:
+    return Path(path_str)
+
+
 def _main():
-    args = setup_args()
-    print(args.config.location)
-    raise NotImplementedError("No functionality is implemented.")
+    setup_args()
+    print("It Works!")
+    # raise NotImplementedError("No functionality is implemented.")
 
 
 if __name__ == '__main__':
