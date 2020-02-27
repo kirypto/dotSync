@@ -1,5 +1,6 @@
 import sys as _sys
 from argparse import HelpFormatter, OPTIONAL, ZERO_OR_MORE, SUPPRESS, ArgumentParser, Namespace
+from enum import Enum
 from pathlib import Path
 from typing import NoReturn, Text, Any
 
@@ -38,6 +39,15 @@ class UsageOnErrorArgumentParser(ArgumentParser):
         return super().parse_args(args=args, namespace=namespace)
 
 
+class _SyncCommand(Enum):
+    LOCAL = 'local'
+    REPO = 'repo'
+    CONFIG = 'config'
+
+    def __str__(self) -> str:
+        return self.value
+
+
 def _parse_program_arguments() -> Namespace:
     parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
@@ -46,7 +56,7 @@ def _parse_program_arguments() -> Namespace:
     subparsers = parser.add_subparsers(title="File synchronization commands", required=True, dest="command")
 
     local_command_parser = subparsers.add_parser(
-        "local",
+        f"{_SyncCommand.LOCAL}",
         help="update local dot files to match those from the corresponding files in the repository",
         description="update local dot files to match those from the corresponding files in the repository",
         usage=f"{parser.prog} local [--fileName FILENAME]",
@@ -54,7 +64,7 @@ def _parse_program_arguments() -> Namespace:
     local_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
 
     repo_command_parser = subparsers.add_parser(
-        "repo",
+        f"{_SyncCommand.REPO}",
         help="update repository files to match those from the corresponding local dot files",
         description="update repository files to match those from the corresponding local dot files",
         usage=f"{parser.prog} repo [--fileName FILENAME]",
@@ -62,7 +72,7 @@ def _parse_program_arguments() -> Namespace:
     repo_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
 
     config_command_parser = subparsers.add_parser(
-        "config",
+        f"{_SyncCommand.CONFIG}",
         help=f"sets the configuration of {parser.prog}",
         description=f"sets the configuration of {parser.prog}",
         usage=f"{parser.prog} config [--location LOCATION]",
@@ -77,26 +87,26 @@ def to_path(path_str: str) -> Path:
 
 
 def _command_main_config():
-    raise NotImplementedError("Command 'config' is not yet implemented.")
+    raise NotImplementedError(f"Command '{_SyncCommand.CONFIG}' is not yet implemented.")
 
 
 def _command_main_repo():
-    raise NotImplementedError("Command 'repo' is not yet implemented.")
+    raise NotImplementedError(f"Command '{_SyncCommand.REPO}' is not yet implemented.")
 
 
 def _command_main_local():
-    raise NotImplementedError("Command 'local' is not yet implemented.")
+    raise NotImplementedError(f"Command '{_SyncCommand.LOCAL}' is not yet implemented.")
 
 
 def _main():
     arguments = _parse_program_arguments()
 
-    command = arguments.command
-    if command == "config":
+    command = _SyncCommand(arguments.command)
+    if command == _SyncCommand.CONFIG:
         _command_main_config()
-    elif command == "repo":
+    elif command == _SyncCommand.REPO:
         _command_main_repo()
-    elif command == "local":
+    elif command == _SyncCommand.LOCAL:
         _command_main_local()
 
 
