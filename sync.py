@@ -77,17 +77,23 @@ def _parse_program_arguments() -> Namespace:
         description=f"sets the configuration of {parser.prog}",
         usage=f"{parser.prog} config [--location LOCATION]",
     ).add_mutually_exclusive_group(required=True)
-    config_command_parser.add_argument("--location", type=to_path, help="sets the local dot file directory path to synchronize")
+    config_command_parser.add_argument("--location", help="sets the local dot file directory path to synchronize")
 
     return parser.parse_args()
 
 
-def to_path(path_str: str) -> Path:
-    return Path(path_str)
-
-
 def _command_main_config(arguments: Namespace) -> NoReturn:
-    raise NotImplementedError(f"Command '{_SyncCommand.CONFIG}' is not yet implemented.")
+    if "location" in arguments:
+        dot_file_location = Path(arguments.location)
+        if not dot_file_location.exists():
+            raise ValueError(f"Provided location '{dot_file_location.absolute()}' does not exist")
+        elif not dot_file_location.is_dir():
+            raise ValueError(f"Provided location '{dot_file_location.absolute()}' is not a directory")
+
+        print(f"It works! (path is: {dot_file_location})")
+    else:
+        raise RuntimeError(f"Command '{_SyncCommand.REPO}' failed, no operation could be identified")
+    exit(0)
 
 
 def _command_main_repo(arguments: Namespace) -> NoReturn:
