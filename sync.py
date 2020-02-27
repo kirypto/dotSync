@@ -86,15 +86,15 @@ def to_path(path_str: str) -> Path:
     return Path(path_str)
 
 
-def _command_main_config():
+def _command_main_config(arguments: Namespace) -> NoReturn:
     raise NotImplementedError(f"Command '{_SyncCommand.CONFIG}' is not yet implemented.")
 
 
-def _command_main_repo():
+def _command_main_repo(arguments: Namespace) -> NoReturn:
     raise NotImplementedError(f"Command '{_SyncCommand.REPO}' is not yet implemented.")
 
 
-def _command_main_local():
+def _command_main_local(arguments: Namespace) -> NoReturn:
     raise NotImplementedError(f"Command '{_SyncCommand.LOCAL}' is not yet implemented.")
 
 
@@ -103,11 +103,11 @@ def _main():
 
     command = _SyncCommand(arguments.command)
     if command == _SyncCommand.CONFIG:
-        _command_main_config()
+        _command_main_config(arguments)
     elif command == _SyncCommand.REPO:
-        _command_main_repo()
+        _command_main_repo(arguments)
     elif command == _SyncCommand.LOCAL:
-        _command_main_local()
+        _command_main_local(arguments)
 
 
 if __name__ == '__main__':
