@@ -76,10 +76,28 @@ def to_path(path_str: str) -> Path:
     return Path(path_str)
 
 
+def _command_main_config():
+    raise NotImplementedError("Command 'config' is not yet implemented.")
+
+
+def _command_main_repo():
+    raise NotImplementedError("Command 'repo' is not yet implemented.")
+
+
+def _command_main_local():
+    raise NotImplementedError("Command 'local' is not yet implemented.")
+
+
 def _main():
-    setup_args()
-    print("It Works!")
-    # raise NotImplementedError("No functionality is implemented.")
+    arguments = setup_args()
+
+    command = arguments.command
+    if command == "config":
+        _command_main_config()
+    elif command == "repo":
+        _command_main_repo()
+    elif command == "local":
+        _command_main_local()
 
 
 if __name__ == '__main__':
