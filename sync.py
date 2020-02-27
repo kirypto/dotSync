@@ -38,7 +38,7 @@ class UsageOnErrorArgumentParser(ArgumentParser):
         return super().parse_args(args=args, namespace=namespace)
 
 
-def setup_args() -> Namespace:
+def _parse_program_arguments() -> Namespace:
     parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
     parser.add_argument("-v", "--version", action="version", help="shows the version and exits",
@@ -89,7 +89,7 @@ def _command_main_local():
 
 
 def _main():
-    arguments = setup_args()
+    arguments = _parse_program_arguments()
 
     command = arguments.command
     if command == "config":
