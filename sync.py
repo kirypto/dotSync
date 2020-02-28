@@ -2,7 +2,7 @@ import sys as _sys
 from argparse import HelpFormatter, OPTIONAL, ZERO_OR_MORE, SUPPRESS, ArgumentParser, Namespace
 from enum import Enum
 from pathlib import Path
-from typing import NoReturn, Text, Any
+from typing import Dict, Any, NoReturn, Text
 
 from _version import __version__
 
@@ -10,6 +10,9 @@ from _version import __version__
 class RawTextWithDefaultsHelpFormatter(HelpFormatter):
     """Help message formatter which adds default values to argument help and does not force specific newline positions.
     """
+
+    def __init__(self, prog, indent_increment=2, max_help_position=30, width=None):
+        super().__init__(prog, indent_increment=indent_increment, max_help_position=max_help_position, width=width)
 
     def _split_lines(self, text, width):
         return text.splitlines()
@@ -49,7 +52,7 @@ class _SyncCommand(Enum):
 
 
 def _parse_program_arguments() -> Namespace:
-    parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
+    parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter, )
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
     parser.add_argument("-v", "--version", action="version", help="shows the version and exits",
                         version=f"%(prog)s {__version__}")
@@ -60,6 +63,7 @@ def _parse_program_arguments() -> Namespace:
         help="update local dot files to match those from the corresponding files in the repository",
         description="update local dot files to match those from the corresponding files in the repository",
         usage=f"{parser.prog} local [--fileName FILENAME]",
+        formatter_class=RawTextWithDefaultsHelpFormatter
     )
     local_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
 
@@ -68,6 +72,7 @@ def _parse_program_arguments() -> Namespace:
         help="update repository files to match those from the corresponding local dot files",
         description="update repository files to match those from the corresponding local dot files",
         usage=f"{parser.prog} repo [--fileName FILENAME]",
+        formatter_class=RawTextWithDefaultsHelpFormatter
     )
     repo_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
 
@@ -75,22 +80,44 @@ def _parse_program_arguments() -> Namespace:
         f"{_SyncCommand.CONFIG}",
         help=f"sets the configuration of {parser.prog}",
         description=f"sets the configuration of {parser.prog}",
-        usage=f"{parser.prog} config [--location LOCATION]",
+        usage=f"{parser.prog} config [--location [LOCATION]]",
+        formatter_class=RawTextWithDefaultsHelpFormatter
     ).add_mutually_exclusive_group(required=True)
     config_command_parser.add_argument("--location", help="sets the local dot file directory path to synchronize")
+    config_command_parser.add_argument("--list", action="store_true", help="display current configuration")
 
     return parser.parse_args()
 
 
+def _read_config() -> Dict[Text, Text]:
+    from edn_format import loads
+    config_file_path = Path("dotSync.edn")
+    raw_config = config_file_path.read_text(encoding="UTF-8") if config_file_path.exists() else "{}"
+    return dict(loads(raw_config))
+
+
+def _write_config(config: Dict[Text, Text]):
+    from edn_format import dumps
+    config_file_path = Path("dotSync.edn")
+    config_file_path.write_text(dumps(config), encoding="UTF-8")
+
+
 def _command_main_config(arguments: Namespace) -> NoReturn:
-    if "location" in arguments:
+    config = _read_config()
+
+    if arguments.list:
+        print(config)
+
+    elif arguments.location:
         dot_file_location = Path(arguments.location)
         if not dot_file_location.exists():
             raise ValueError(f"Provided location '{dot_file_location.resolve()}' does not exist")
         elif not dot_file_location.is_dir():
             raise ValueError(f"Provided location '{dot_file_location.resolve()}' is not a directory")
 
-        print(f"It works! (path is: {dot_file_location.resolve()})")
+        config["location"] = str(dot_file_location.resolve())
+        _write_config(config)
+
     else:
         raise RuntimeError(f"Command '{_SyncCommand.REPO}' failed, no operation could be identified")
     exit(0)
