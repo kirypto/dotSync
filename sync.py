@@ -86,11 +86,11 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     if "location" in arguments:
         dot_file_location = Path(arguments.location)
         if not dot_file_location.exists():
-            raise ValueError(f"Provided location '{dot_file_location.absolute()}' does not exist")
+            raise ValueError(f"Provided location '{dot_file_location.resolve()}' does not exist")
         elif not dot_file_location.is_dir():
-            raise ValueError(f"Provided location '{dot_file_location.absolute()}' is not a directory")
+            raise ValueError(f"Provided location '{dot_file_location.resolve()}' is not a directory")
 
-        print(f"It works! (path is: {dot_file_location})")
+        print(f"It works! (path is: {dot_file_location.resolve()})")
     else:
         raise RuntimeError(f"Command '{_SyncCommand.REPO}' failed, no operation could be identified")
     exit(0)
