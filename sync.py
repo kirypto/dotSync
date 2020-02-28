@@ -106,7 +106,9 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     config = _read_config()
 
     if arguments.list:
-        print(config)
+        width = max([len(key) for key in config.keys()])
+        for key, value in config.items():
+            print(f"{key.ljust(width)} = {value}")
 
     elif arguments.location:
         dot_file_location = Path(arguments.location)
