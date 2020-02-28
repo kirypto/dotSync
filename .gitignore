@@ -207,3 +207,7 @@ venv.bak/
 pip-selfcheck.json
 
 # End of https://www.gitignore.io/api/python,pycharm+all,venv
+
+####################################################################################################
+
+dotSync.edn
