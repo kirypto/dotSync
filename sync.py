@@ -2,7 +2,7 @@ import sys as _sys
 from argparse import HelpFormatter, OPTIONAL, ZERO_OR_MORE, SUPPRESS, ArgumentParser, Namespace
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, NoReturn, Text
+from typing import Dict, Any, NoReturn, Text, Set
 
 from _version import __version__
 
@@ -126,7 +126,20 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
 
 
 def _command_main_repo(arguments: Namespace) -> NoReturn:
-    raise NotImplementedError(f"Command '{_SyncCommand.REPO}' is not yet implemented.")
+    config = _read_config()
+
+    repo_files_by_name = {path.name: path for path in Path("DotFiles").iterdir()}
+    file_names_to_sync: Set[str]
+
+    if arguments.fileName:
+        if arguments.fileName not in repo_files_by_name:
+            raise ValueError(f"No stored file matches the name '{arguments.fileName}'")
+        file_names_to_sync = {arguments.fileName}
+    else:
+        file_names_to_sync = {file_name for file_name in repo_files_by_name.keys()}
+
+    print(file_names_to_sync)
+    exit(0)
 
 
 def _command_main_local(arguments: Namespace) -> NoReturn:
