@@ -146,4 +146,7 @@ def _main():
 
 
 if __name__ == '__main__':
-    _main()
+    try:
+        _main()
+    except Exception as e:
+        print(f"!! {type(e).__name__}: {e}", file=_sys.stderr)
