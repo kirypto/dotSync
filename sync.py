@@ -43,9 +43,9 @@ class UsageOnErrorArgumentParser(ArgumentParser):
 
 
 class _SyncCommand(Enum):
-    LOCAL = 'local'
-    REPO = 'repo'
-    CONFIG = 'config'
+    LOCAL = "local"
+    REPO = "repo"
+    CONFIG = "config"
 
     def __str__(self) -> str:
         return self.value
@@ -128,17 +128,30 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
 def _command_main_repo(arguments: Namespace) -> NoReturn:
     config = _read_config()
 
-    repo_files_by_name = {path.name: path for path in Path("DotFiles").iterdir()}
+    stored_dot_files = {path.name: path for path in Path("DotFiles").iterdir()}
     file_names_to_sync: Set[str]
 
     if arguments.fileName:
-        if arguments.fileName not in repo_files_by_name:
+        if arguments.fileName not in stored_dot_files:
             raise ValueError(f"No stored file matches the name '{arguments.fileName}'")
         file_names_to_sync = {arguments.fileName}
     else:
-        file_names_to_sync = {file_name for file_name in repo_files_by_name.keys()}
+        file_names_to_sync = set(stored_dot_files.keys())
 
-    print(file_names_to_sync)
+    repo_files_by_name: Dict[str, Path] = {path.name: path for name, path in stored_dot_files.items()
+                                           if path.name in file_names_to_sync}
+    local_files_by_name: Dict[str, Path] = {path.name: path for path in Path(config["location"]).iterdir()
+                                            if path.name in file_names_to_sync}
+
+    if local_files_by_name.keys() != repo_files_by_name.keys():
+        missing_files = ", ".join({f"'{name}'" for name in file_names_to_sync if name not in local_files_by_name.keys()})
+        raise ValueError(f"Could not find local file(s) matching: {missing_files}")
+
+    for file_name in file_names_to_sync:
+        print(f"Overwriting repo's '{file_name}' with local version ... ", end="")
+        local_content = local_files_by_name[file_name].read_text(encoding="UTF-8")
+        repo_files_by_name[file_name].write_text(local_content, encoding="UTF-8", )
+        print("Done!")
     exit(0)
 
 
