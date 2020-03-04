@@ -2,7 +2,7 @@ import sys as _sys
 from argparse import HelpFormatter, OPTIONAL, ZERO_OR_MORE, SUPPRESS, ArgumentParser, Namespace
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, NoReturn, Text, Set, List
+from typing import Dict, Any, NoReturn, Text, Set, List, Tuple
 
 from _version import __version__
 
@@ -147,9 +147,7 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     exit(0)
 
 
-def _command_main_repo(arguments: Namespace) -> NoReturn:
-    config = _read_config()
-
+def prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
     stored_dot_files = {path.name: path for path in Path("DotFiles").iterdir()}
     file_names_to_sync: Set[str]
 
@@ -169,6 +167,13 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
         missing_files = ", ".join({f"'{name}'" for name in file_names_to_sync if name not in local_files_by_name.keys()})
         raise ValueError(f"Could not find local file(s) matching: {missing_files}")
 
+    return file_names_to_sync, local_files_by_name, repo_files_by_name
+
+
+def _command_main_repo(arguments: Namespace) -> NoReturn:
+    config = _read_config()
+    file_names_to_sync, local_files_by_name, repo_files_by_name = prepare_for_sync(arguments, config)
+
     for file_name in file_names_to_sync:
         print(f" - Overwriting repo's '{file_name}' with local version ... ", end="")
         local_content_bytes = local_files_by_name[file_name].read_bytes()
@@ -185,7 +190,16 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
 
 
 def _command_main_local(arguments: Namespace) -> NoReturn:
-    raise NotImplementedError(f"Command '{_SyncCommand.LOCAL}' is not yet implemented.")
+    config = _read_config()
+    file_names_to_sync, local_files_by_name, repo_files_by_name = prepare_for_sync(arguments, config)
+
+    for file_name in file_names_to_sync:
+        print(f" - Overwriting local's '{file_name}' with repository version ... ", end="")
+        local_content_bytes = repo_files_by_name[file_name].read_bytes()
+        local_files_by_name[file_name].write_bytes(local_content_bytes)
+        print("Done!")
+
+    exit(0)
 
 
 def _main():
