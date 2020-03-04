@@ -2,7 +2,7 @@ import sys as _sys
 from argparse import HelpFormatter, OPTIONAL, ZERO_OR_MORE, SUPPRESS, ArgumentParser, Namespace
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, NoReturn, Text, Set
+from typing import Dict, Any, NoReturn, Text, Set, List
 
 from _version import __version__
 
@@ -51,6 +51,19 @@ class _SyncCommand(Enum):
         return self.value
 
 
+class _ConfigLineEnding(Enum):
+    NONE = "none"
+    LF = "lf"
+    CRLF = "crlf"
+
+    def __str__(self) -> str:
+        return self.value
+
+    @staticmethod
+    def choices() -> List[str]:
+        return [ending.value for ending in _ConfigLineEnding]
+
+
 def _parse_program_arguments() -> Namespace:
     parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter, )
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
@@ -80,10 +93,12 @@ def _parse_program_arguments() -> Namespace:
         f"{_SyncCommand.CONFIG}",
         help=f"sets the configuration of {parser.prog}",
         description=f"sets the configuration of {parser.prog}",
-        usage=f"{parser.prog} config [--location [LOCATION]]",
+        usage=f"{parser.prog} config [--list] [--location PATH] [--lineEnding ENDING]",
         formatter_class=RawTextWithDefaultsHelpFormatter
     ).add_mutually_exclusive_group(required=True)
-    config_command_parser.add_argument("--location", help="sets the local dot file directory path to synchronize")
+    config_command_parser.add_argument("--location", metavar="PATH", help="sets the local dot file directory path to synchronize")
+    config_command_parser.add_argument("--lineEnding", metavar="ENDING", choices=_ConfigLineEnding.choices(),
+                                       help=f"sets what line ending to normalize repo files with: {', '.join(_ConfigLineEnding.choices())}")
     config_command_parser.add_argument("--list", action="store_true", help="display current configuration")
 
     return parser.parse_args()
@@ -106,9 +121,12 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     config = _read_config()
 
     if arguments.list:
-        width = max([len(key) for key in config.keys()])
-        for key, value in config.items():
-            print(f"{key.ljust(width)} = {value}")
+        if len(config) == 0:
+            print("<EMPTY CONFIG>")
+        else:
+            width = max([len(key) for key in config.keys()])
+            for key, value in config.items():
+                print(f"{key.ljust(width)} = {value}")
 
     elif arguments.location:
         dot_file_location = Path(arguments.location)
@@ -120,8 +138,12 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
         config["location"] = str(dot_file_location.resolve())
         _write_config(config)
 
+    elif arguments.lineEnding:
+        config["lineEnding"] = _ConfigLineEnding(arguments.lineEnding).value
+        _write_config(config)
+
     else:
-        raise RuntimeError(f"Command '{_SyncCommand.REPO}' failed, no operation could be identified")
+        raise RuntimeError(f"Command '{_SyncCommand.CONFIG}' failed, no operation could be identified")
     exit(0)
 
 
@@ -148,9 +170,16 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
         raise ValueError(f"Could not find local file(s) matching: {missing_files}")
 
     for file_name in file_names_to_sync:
-        print(f"Overwriting repo's '{file_name}' with local version ... ", end="")
-        local_content = local_files_by_name[file_name].read_text(encoding="UTF-8")
-        repo_files_by_name[file_name].write_text(local_content, encoding="UTF-8", )
+        print(f" - Overwriting repo's '{file_name}' with local version ... ", end="")
+        local_content_bytes = local_files_by_name[file_name].read_bytes()
+
+        line_ending_normalization_setting = _ConfigLineEnding(config["lineEnding"]) if "lineEnding" in config else _ConfigLineEnding.NONE
+        if line_ending_normalization_setting == _ConfigLineEnding.LF:
+            local_content_bytes = local_content_bytes.replace(b"\r\n", b"\n")
+        elif line_ending_normalization_setting == _ConfigLineEnding.CRLF:
+            local_content_bytes = local_content_bytes.replace(b"\n", b"\r\n").replace(b"\r\r", b"\r")
+
+        repo_files_by_name[file_name].write_bytes(local_content_bytes)
         print("Done!")
     exit(0)
 
@@ -176,3 +205,4 @@ if __name__ == '__main__':
         _main()
     except Exception as e:
         print(f"!! {type(e).__name__}: {e}", file=_sys.stderr)
+        raise e
