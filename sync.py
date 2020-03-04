@@ -108,7 +108,7 @@ def _read_config() -> Dict[Text, Text]:
     from edn_format import loads
     config_file_path = Path("dotSync.edn")
     raw_config = config_file_path.read_text(encoding="UTF-8") if config_file_path.exists() else "{}"
-    return dict(loads(raw_config))
+    return dict(loads(raw_config)) if raw_config else {}
 
 
 def _write_config(config: Dict[Text, Text]):
@@ -148,6 +148,9 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
 
 
 def prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
+    if "location" not in config:
+        raise ValueError(f"The local dot file location must be configured before synchronization")
+
     stored_dot_files = {path.name: path for path in Path("DotFiles").iterdir()}
     file_names_to_sync: Set[str]
 
@@ -219,4 +222,3 @@ if __name__ == '__main__':
         _main()
     except Exception as e:
         print(f"!! {type(e).__name__}: {e}", file=_sys.stderr)
-        raise e
