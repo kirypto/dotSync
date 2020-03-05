@@ -105,16 +105,29 @@ def _parse_program_arguments() -> Namespace:
 
 
 def _read_config() -> Dict[Text, Text]:
-    from edn_format import loads
-    config_file_path = Path("dotSync.edn")
-    raw_config = config_file_path.read_text(encoding="UTF-8") if config_file_path.exists() else "{}"
-    return dict(loads(raw_config)) if raw_config else {}
+    config_file_path = Path("dotSync.properties")
+    raw_config = config_file_path.read_text(encoding="UTF-8") if config_file_path.exists() else ""
+
+    if "\\\n" in raw_config or "\r\n\\" in raw_config:
+        raise ValueError("Multi-line properties are not supported")
+
+    raw_config_lines = [[txt.strip() for txt in prop_line.split("=")] for prop_line in raw_config.splitlines(keepends=False)
+                        if not prop_line.strip().startswith("#") and prop_line.count("=") == 1]
+
+    return {key: val for key, val in raw_config_lines}
 
 
 def _write_config(config: Dict[Text, Text]):
-    from edn_format import dumps
-    config_file_path = Path("dotSync.edn")
-    config_file_path.write_text(dumps(config), encoding="UTF-8")
+    for key, val in config.items():
+        if len(val.splitlines()) > 1:
+            raise ValueError(f"Multi-line properties are not supported")
+
+    raw_config_lines = [f"{key} = {val}" for key, val in config.items()]
+
+    raw_config = "\n".join(raw_config_lines)
+
+    config_file_path = Path("dotSync.properties")
+    config_file_path.write_text(raw_config, encoding="UTF-8")
 
 
 def _command_main_config(arguments: Namespace) -> NoReturn:
@@ -135,7 +148,7 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
         elif not dot_file_location.is_dir():
             raise ValueError(f"Provided location '{dot_file_location.resolve()}' is not a directory")
 
-        config["location"] = str(dot_file_location.resolve())
+        config["location"] = dot_file_location.resolve().as_posix()
         _write_config(config)
 
     elif arguments.lineEnding:
