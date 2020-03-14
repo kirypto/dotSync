@@ -22,7 +22,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, NoReturn, Text, Set, List, Tuple
 
-from _version import __version__
+from _dotSyncVersion import __version__
 
 
 class RawTextWithDefaultsHelpFormatter(HelpFormatter):
