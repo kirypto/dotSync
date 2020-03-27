@@ -208,10 +208,16 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
     return file_names_to_sync, local_files_by_name, repo_files_by_name
 
 
-def _update_repo_from_remote() -> Tuple[bool, str]:
+def _pull_repo_changes_from_remote() -> Tuple[bool, str]:
     repo = Repo()
     pull_result = repo.git.pull()
     return pull_result != "Already up to date.", pull_result
+
+
+def _push_repo_changes_to_remote():
+    repo = Repo()
+    push_result = repo.git.push()
+    print(push_result)
 
 
 def _command_main_repo(arguments: Namespace) -> NoReturn:
@@ -219,7 +225,7 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
     file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
 
     if arguments.push:
-        files_updated, git_log = _update_repo_from_remote()
+        files_updated, git_log = _pull_repo_changes_from_remote()
         if files_updated:
             print(git_log)
             raise ValueError("Aborting overwriting repo's dot files due them changing from 'git pull' (Repeat command if overwrite is desired)")
@@ -236,6 +242,9 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
 
         repo_files_by_name[file_name].write_bytes(local_content_bytes)
         print("Done!")
+
+    if arguments.push:
+        _push_repo_changes_to_remote()
     exit(0)
 
 
@@ -243,7 +252,7 @@ def _command_main_local(arguments: Namespace) -> NoReturn:
     config = _read_config()
 
     if arguments.pull:
-        files_updated, git_log = _update_repo_from_remote()
+        files_updated, git_log = _pull_repo_changes_from_remote()
         if files_updated:
             print(git_log)
         else:
