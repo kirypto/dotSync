@@ -246,6 +246,8 @@ def _command_main_local(arguments: Namespace) -> NoReturn:
         files_updated, git_log = _update_repo_from_remote()
         if files_updated:
             print(git_log)
+        else:
+            print(" - Repo is up to date")
 
     file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
 
