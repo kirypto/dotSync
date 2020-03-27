@@ -22,6 +22,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, NoReturn, Text, Set, List, Tuple
 
+from git import Repo
+
 from _dotSyncVersion import __version__
 
 
@@ -93,19 +95,21 @@ def _parse_program_arguments() -> Namespace:
         f"{_SyncCommand.LOCAL}",
         help="update local dot files to match those from the corresponding files in the repository",
         description="update local dot files to match those from the corresponding files in the repository",
-        usage=f"{parser.prog} local [--fileName FILENAME]",
+        usage=f"{parser.prog} local [--fileName FILENAME] [--pull]",
         formatter_class=RawTextWithDefaultsHelpFormatter
     )
     local_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
+    local_command_parser.add_argument("--pull", action="store_true", help="pulls changes from the remote before synchronizing")
 
     repo_command_parser = subparsers.add_parser(
         f"{_SyncCommand.REPO}",
         help="update repository files to match those from the corresponding local dot files",
         description="update repository files to match those from the corresponding local dot files",
-        usage=f"{parser.prog} repo [--fileName FILENAME]",
+        usage=f"{parser.prog} repo [--fileName FILENAME] [--push]",
         formatter_class=RawTextWithDefaultsHelpFormatter
     )
     repo_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
+    repo_command_parser.add_argument("--push", action="store_true", help="pushes changes to the remote after synchronizing")
 
     config_command_parser = subparsers.add_parser(
         f"{_SyncCommand.CONFIG}",
@@ -178,7 +182,7 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     exit(0)
 
 
-def prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
+def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
     if "location" not in config:
         raise ValueError(f"The local dot file location must be configured before synchronization")
 
@@ -204,9 +208,21 @@ def prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[
     return file_names_to_sync, local_files_by_name, repo_files_by_name
 
 
+def _update_repo_from_remote() -> Tuple[bool, str]:
+    repo = Repo()
+    pull_result = repo.git.pull()
+    return pull_result != "Already up to date.", pull_result
+
+
 def _command_main_repo(arguments: Namespace) -> NoReturn:
     config = _read_config()
-    file_names_to_sync, local_files_by_name, repo_files_by_name = prepare_for_sync(arguments, config)
+    file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
+
+    if arguments.push:
+        files_updated, git_log = _update_repo_from_remote()
+        if files_updated:
+            print(git_log)
+            raise ValueError("Aborting overwriting repo's dot files due them changing from 'git pull' (Repeat command if overwrite is desired)")
 
     for file_name in file_names_to_sync:
         print(f" - Overwriting repo's '{file_name}' with local version ... ", end="")
@@ -225,14 +241,19 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
 
 def _command_main_local(arguments: Namespace) -> NoReturn:
     config = _read_config()
-    file_names_to_sync, local_files_by_name, repo_files_by_name = prepare_for_sync(arguments, config)
+
+    if arguments.pull:
+        files_updated, git_log = _update_repo_from_remote()
+        if files_updated:
+            print(git_log)
+
+    file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
 
     for file_name in file_names_to_sync:
         print(f" - Overwriting local's '{file_name}' with repository version ... ", end="")
         local_content_bytes = repo_files_by_name[file_name].read_bytes()
         local_files_by_name[file_name].write_bytes(local_content_bytes)
         print("Done!")
-
     exit(0)
 
 
