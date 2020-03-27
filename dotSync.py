@@ -219,12 +219,16 @@ def _push_repo_changes_to_remote():
     repo.git.push()
 
 
-def _commit_dot_file_changes():
+def _commit_dot_file_changes() -> Tuple[bool, str]:
     repo = Repo()
     modified_file_list: str = repo.git.ls_files(modified=True)
+    if "" == modified_file_list:
+        return False, "No changes to commit"
     committed_file_names = [f"'{Path(path).name}'" for path in modified_file_list.splitlines()]
     repo.git.add(update=True)
-    repo.index.commit(f"[dotSync] Updating dot files: {', '.join(committed_file_names)}")
+    commit_message = f"[dotSync] Updating dot files: {', '.join(committed_file_names)}"
+    repo.index.commit(commit_message)
+    return True, commit_message
 
 
 def _command_main_repo(arguments: Namespace) -> NoReturn:
@@ -251,10 +255,13 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
         print("Done!")
 
     if arguments.push:
-        print(" - Committing changes")
-        _commit_dot_file_changes()
-        print(" - Pushing to remote")
-        # _push_repo_changes_to_remote()
+        print(" - Committing changes ... ")
+        commit_successful, message = _commit_dot_file_changes()
+        if not commit_successful:
+            print(f"   Failed! {message}")
+        else:
+            print(" - Pushing to remote")
+            # _push_repo_changes_to_remote()
     exit(0)
 
 
