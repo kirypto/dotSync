@@ -261,7 +261,7 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
             print(f"   Failed! {message}")
         else:
             print(" - Pushing to remote")
-            # _push_repo_changes_to_remote()
+            _push_repo_changes_to_remote()
     exit(0)
 
 
