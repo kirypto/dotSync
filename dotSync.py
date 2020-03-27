@@ -216,8 +216,7 @@ def _pull_repo_changes_from_remote() -> Tuple[bool, str]:
 
 def _push_repo_changes_to_remote():
     repo = Repo()
-    push_result = repo.git.push()
-    print(push_result)
+    repo.git.push()
 
 
 def _command_main_repo(arguments: Namespace) -> NoReturn:
@@ -245,6 +244,7 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
 
     if arguments.push:
         _push_repo_changes_to_remote()
+        print(" - Changes pushed to remote")
     exit(0)
 
 
