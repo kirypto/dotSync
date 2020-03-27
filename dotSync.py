@@ -236,13 +236,16 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
     file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
 
     if arguments.push:
+        print(" - Checking remote in case of changes ... ", end="", flush=True)
         files_updated, git_log = _pull_repo_changes_from_remote()
-        if files_updated:
-            print(git_log)
+        if not files_updated:
+            print("done")
+        else:
+            print(f"\n{git_log}")
             raise ValueError("Aborting overwriting repo's dot files due them changing from 'git pull' (Repeat command if overwrite is desired)")
 
     for file_name in file_names_to_sync:
-        print(f" - Overwriting repo's '{file_name}' with local version ... ", end="")
+        print(f" - Updating repo's '{file_name}' from local version ... ", end="", flush=True)
         local_content_bytes = local_files_by_name[file_name].read_bytes()
 
         line_ending_normalization_setting = _ConfigLineEnding(config["lineEnding"]) if "lineEnding" in config else _ConfigLineEnding.NONE
@@ -251,17 +254,22 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
         elif line_ending_normalization_setting == _ConfigLineEnding.CRLF:
             local_content_bytes = local_content_bytes.replace(b"\n", b"\r\n").replace(b"\r\r", b"\r")
 
-        repo_files_by_name[file_name].write_bytes(local_content_bytes)
-        print("Done!")
+        if repo_files_by_name[file_name].read_bytes() == local_content_bytes:
+            print("no changes")
+        else:
+            repo_files_by_name[file_name].write_bytes(local_content_bytes)
+            print("overwritten")
 
     if arguments.push:
-        print(" - Committing changes ... ")
+        print(" - Committing changes ... ", end="", flush=True)
         commit_successful, message = _commit_dot_file_changes()
-        if not commit_successful:
-            print(f"   Failed! {message}")
-        else:
-            print(" - Pushing to remote")
+        if commit_successful:
+            print("done")
+            print(" - Pushing to remote ...", end="", flush=True)
             _push_repo_changes_to_remote()
+            print("done")
+        else:
+            print(f"{message}")
     exit(0)
 
 
@@ -278,10 +286,14 @@ def _command_main_local(arguments: Namespace) -> NoReturn:
     file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
 
     for file_name in file_names_to_sync:
-        print(f" - Overwriting local's '{file_name}' with repository version ... ", end="")
-        local_content_bytes = repo_files_by_name[file_name].read_bytes()
-        local_files_by_name[file_name].write_bytes(local_content_bytes)
-        print("Done!")
+        print(f" - Updating local's '{file_name}' with repository version ... ", end="", flush=True)
+        repo_content_bytes = repo_files_by_name[file_name].read_bytes()
+
+        if local_files_by_name[file_name].read_bytes() == repo_content_bytes:
+            print("no changes")
+        else:
+            local_files_by_name[file_name].write_bytes(repo_content_bytes)
+            print("overwritten")
     exit(0)
 
 
