@@ -219,6 +219,14 @@ def _push_repo_changes_to_remote():
     repo.git.push()
 
 
+def _commit_dot_file_changes():
+    repo = Repo()
+    modified_file_list: str = repo.git.ls_files(modified=True)
+    committed_file_names = [f"'{Path(path).name}'" for path in modified_file_list.splitlines()]
+    repo.git.add(update=True)
+    repo.index.commit(f"[dotSync] Updating dot files: {', '.join(committed_file_names)}")
+
+
 def _command_main_repo(arguments: Namespace) -> NoReturn:
     config = _read_config()
     file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
@@ -243,8 +251,10 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
         print("Done!")
 
     if arguments.push:
-        _push_repo_changes_to_remote()
-        print(" - Changes pushed to remote")
+        print(" - Committing changes")
+        _commit_dot_file_changes()
+        print(" - Pushing to remote")
+        # _push_repo_changes_to_remote()
     exit(0)
 
 
