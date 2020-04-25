@@ -22,7 +22,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, NoReturn, Text, Set, List, Tuple
 
-from git import Repo, InvalidGitRepositoryError
+from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 from _dotSyncVersion import __version__
 
@@ -195,6 +195,12 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
         Repo(dot_files_repo_dir)
     except InvalidGitRepositoryError:
         raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' is not a git repository")
+    try:
+        dot_files_repo = Repo(dot_files_repo_dir)
+        dot_files_repo.git.config("user.name")  # Throws exception if not set
+        dot_files_repo.git.config("user.email")  # Throws exception if not set
+    except GitCommandError:
+        raise ValueError("Repository must configure both 'user.name' and 'user.email'")
 
     stored_dot_files = {path.name: path for path in dot_files_repo_dir.iterdir()
                         if path.name != ".git" and path.is_file()}
