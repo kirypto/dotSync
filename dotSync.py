@@ -278,7 +278,7 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
         commit_successful, message = _commit_dot_file_changes()
         if commit_successful:
             print("done")
-            print(" - Pushing to remote ...", end="", flush=True)
+            print(" - Pushing to remote ... ", end="", flush=True)
             _push_repo_changes_to_remote()
             print("done")
         else:
