@@ -22,7 +22,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, NoReturn, Text, Set, List, Tuple
 
-from git import Repo
+from git import Repo, InvalidGitRepositoryError
 
 from _dotSyncVersion import __version__
 
@@ -164,13 +164,13 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
                 print(f"{key.ljust(width)} = {value}")
 
     elif arguments.location:
-        dot_file_location = Path(arguments.location)
+        dot_file_location = Path(arguments.location).resolve().absolute()
         if not dot_file_location.exists():
-            raise ValueError(f"Provided location '{dot_file_location.resolve()}' does not exist")
+            raise ValueError(f"Provided location '{dot_file_location.as_posix()}' does not exist")
         elif not dot_file_location.is_dir():
-            raise ValueError(f"Provided location '{dot_file_location.resolve()}' is not a directory")
+            raise ValueError(f"Provided location '{dot_file_location.as_posix()}' is not a directory")
 
-        config["location"] = dot_file_location.resolve().as_posix()
+        config["location"] = dot_file_location.as_posix()
         _write_config(config)
 
     elif arguments.lineEnding:
@@ -186,7 +186,20 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
     if "location" not in config:
         raise ValueError(f"The local dot file location must be configured before synchronization")
 
-    stored_dot_files = {path.name: path for path in Path("DotFiles").iterdir()}
+    dot_files_repo_dir = Path("DotFiles").resolve().absolute()
+    if not dot_files_repo_dir.exists():
+        raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' does not exist")
+    elif not dot_files_repo_dir.is_dir():
+        raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' is not a directory")
+    try:
+        Repo(dot_files_repo_dir)
+    except InvalidGitRepositoryError:
+        raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' is not a git repository")
+
+    stored_dot_files = {path.name: path for path in dot_files_repo_dir.iterdir()
+                        if path.name != ".git" and path.is_file()}
+    if len(stored_dot_files) == 0:
+        raise ValueError("No files found in the repo to update")
     file_names_to_sync: Set[str]
 
     if arguments.fileName:
