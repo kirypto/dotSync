@@ -222,18 +222,18 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
 
 
 def _pull_repo_changes_from_remote() -> Tuple[bool, str]:
-    repo = Repo()
+    repo = Repo("DotFiles")
     pull_result = repo.git.pull()
     return pull_result != "Already up to date.", pull_result
 
 
 def _push_repo_changes_to_remote():
-    repo = Repo()
+    repo = Repo("DotFiles")
     repo.git.push()
 
 
 def _commit_dot_file_changes() -> Tuple[bool, str]:
-    repo = Repo()
+    repo = Repo("DotFiles")
     modified_file_list: str = repo.git.ls_files(modified=True)
     if "" == modified_file_list:
         return False, "No changes to commit"
