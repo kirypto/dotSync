@@ -22,9 +22,14 @@ with the following implemented commands:
 
 ## Setup
 
-When first running the script, use the `config` sub-command to specify the
-local configuration file location. For example:  
-`dotSync config --location "/path/to/user/home/"`
+- Create a new folder called `DotFiles` inside the `dotSync` repository root 
+  directory. This `DotFiles` folder is where `dotSync.py` will read from and
+  write to when executing, depending on the command run. The `DotFiles` folder
+  is included in the git ignore, and will not affect the `dotSync` project
+  itself.
+- Run the `config` sub-command to specify the location of the local machine's
+  configuration files, for example: `dotSync config --location 
+  "/path/to/user/home/"`
 
 ## Requirements
 
