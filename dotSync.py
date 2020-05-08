@@ -85,7 +85,7 @@ class _ConfigLineEnding(Enum):
 
 
 def _parse_program_arguments() -> Namespace:
-    parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter, )
+    parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
     parser.add_argument("-v", "--version", action="version", help="shows the version and exits",
                         version=f"%(prog)s {__version__}")
@@ -109,7 +109,8 @@ def _parse_program_arguments() -> Namespace:
         formatter_class=RawTextWithDefaultsHelpFormatter
     )
     repo_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
-    repo_command_parser.add_argument("--push", action="store_true", help="pushes changes to the remote after synchronizing")
+    repo_command_parser.add_argument("--commitOnly", action="store_true", help="commits changes to the repository after synchronizing")
+    repo_command_parser.add_argument("--push", action="store_true", help="commits any changes and pushes to the remote after synchronizing")
 
     config_command_parser = subparsers.add_parser(
         f"{_SyncCommand.CONFIG}",
@@ -254,7 +255,7 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
     config = _read_config()
     file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
 
-    if arguments.push:
+    if arguments.push or arguments.commitOnly:
         print(" - Checking remote in case of changes ... ", end="", flush=True)
         files_updated, git_log = _pull_repo_changes_from_remote()
         if not files_updated:
@@ -279,16 +280,16 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
             repo_files_by_name[file_name].write_bytes(local_content_bytes)
             print("overwritten")
 
-    if arguments.push:
+    if arguments.push or arguments.commitOnly:
         print(" - Committing changes ... ", end="", flush=True)
-        commit_successful, message = _commit_dot_file_changes()
-        if commit_successful:
-            print("done")
-            print(" - Pushing to remote ... ", end="", flush=True)
-            _push_repo_changes_to_remote()
-            print("done")
-        else:
-            print(f"{message}")
+        commit_successful, error_message = _commit_dot_file_changes()
+        print("done" if commit_successful else error_message)
+
+    if arguments.push:
+        print(" - Pushing to remote ... ", end="", flush=True)
+        _push_repo_changes_to_remote()
+        print("done")
+
     exit(0)
 
 
