@@ -22,6 +22,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, NoReturn, Text, Set, List, Tuple
 
+from git import Repo, InvalidGitRepositoryError, GitCommandError
+
 from _dotSyncVersion import __version__
 
 
@@ -83,7 +85,7 @@ class _ConfigLineEnding(Enum):
 
 
 def _parse_program_arguments() -> Namespace:
-    parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter, )
+    parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
     parser.add_argument("-v", "--version", action="version", help="shows the version and exits",
                         version=f"%(prog)s {__version__}")
@@ -93,19 +95,22 @@ def _parse_program_arguments() -> Namespace:
         f"{_SyncCommand.LOCAL}",
         help="update local dot files to match those from the corresponding files in the repository",
         description="update local dot files to match those from the corresponding files in the repository",
-        usage=f"{parser.prog} local [--fileName FILENAME]",
+        usage=f"{parser.prog} local [--fileName FILENAME] [--pull]",
         formatter_class=RawTextWithDefaultsHelpFormatter
     )
     local_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
+    local_command_parser.add_argument("--pull", action="store_true", help="pulls changes from the remote before synchronizing")
 
     repo_command_parser = subparsers.add_parser(
         f"{_SyncCommand.REPO}",
         help="update repository files to match those from the corresponding local dot files",
         description="update repository files to match those from the corresponding local dot files",
-        usage=f"{parser.prog} repo [--fileName FILENAME]",
+        usage=f"{parser.prog} repo [--fileName FILENAME] [--push]",
         formatter_class=RawTextWithDefaultsHelpFormatter
     )
     repo_command_parser.add_argument("--fileName", help="only synchronize the dot file of the specified name")
+    repo_command_parser.add_argument("--commitOnly", action="store_true", help="commits changes to the repository after synchronizing")
+    repo_command_parser.add_argument("--push", action="store_true", help="commits any changes and pushes to the remote after synchronizing")
 
     config_command_parser = subparsers.add_parser(
         f"{_SyncCommand.CONFIG}",
@@ -160,13 +165,13 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
                 print(f"{key.ljust(width)} = {value}")
 
     elif arguments.location:
-        dot_file_location = Path(arguments.location)
+        dot_file_location = Path(arguments.location).resolve().absolute()
         if not dot_file_location.exists():
-            raise ValueError(f"Provided location '{dot_file_location.resolve()}' does not exist")
+            raise ValueError(f"Provided location '{dot_file_location.as_posix()}' does not exist")
         elif not dot_file_location.is_dir():
-            raise ValueError(f"Provided location '{dot_file_location.resolve()}' is not a directory")
+            raise ValueError(f"Provided location '{dot_file_location.as_posix()}' is not a directory")
 
-        config["location"] = dot_file_location.resolve().as_posix()
+        config["location"] = dot_file_location.as_posix()
         _write_config(config)
 
     elif arguments.lineEnding:
@@ -178,11 +183,30 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     exit(0)
 
 
-def prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
+def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
     if "location" not in config:
         raise ValueError(f"The local dot file location must be configured before synchronization")
 
-    stored_dot_files = {path.name: path for path in Path("DotFiles").iterdir()}
+    dot_files_repo_dir = Path("DotFiles").resolve().absolute()
+    if not dot_files_repo_dir.exists():
+        raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' does not exist")
+    elif not dot_files_repo_dir.is_dir():
+        raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' is not a directory")
+    try:
+        Repo(dot_files_repo_dir)
+    except InvalidGitRepositoryError:
+        raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' is not a git repository")
+    try:
+        dot_files_repo = Repo(dot_files_repo_dir)
+        dot_files_repo.git.config("user.name")  # Throws exception if not set
+        dot_files_repo.git.config("user.email")  # Throws exception if not set
+    except GitCommandError:
+        raise ValueError("Repository must configure both 'user.name' and 'user.email'")
+
+    stored_dot_files = {path.name: path for path in dot_files_repo_dir.iterdir()
+                        if path.name != ".git" and path.is_file()}
+    if len(stored_dot_files) == 0:
+        raise ValueError("No files found in the repo to update")
     file_names_to_sync: Set[str]
 
     if arguments.fileName:
@@ -204,12 +228,44 @@ def prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[
     return file_names_to_sync, local_files_by_name, repo_files_by_name
 
 
+def _pull_repo_changes_from_remote() -> Tuple[bool, str]:
+    repo = Repo("DotFiles")
+    pull_result = repo.git.pull()
+    return pull_result != "Already up to date.", pull_result
+
+
+def _push_repo_changes_to_remote():
+    repo = Repo("DotFiles")
+    repo.git.push()
+
+
+def _commit_dot_file_changes() -> Tuple[bool, str]:
+    repo = Repo("DotFiles")
+    modified_file_list: str = repo.git.ls_files(modified=True)
+    if "" == modified_file_list:
+        return False, "No changes to commit"
+    committed_file_names = [f"'{Path(path).name}'" for path in modified_file_list.splitlines()]
+    repo.git.add(update=True)
+    commit_message = f"[dotSync] Updating dot files: {', '.join(committed_file_names)}"
+    repo.index.commit(commit_message)
+    return True, commit_message
+
+
 def _command_main_repo(arguments: Namespace) -> NoReturn:
     config = _read_config()
-    file_names_to_sync, local_files_by_name, repo_files_by_name = prepare_for_sync(arguments, config)
+    file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
+
+    if arguments.push or arguments.commitOnly:
+        print(" - Checking remote in case of changes ... ", end="", flush=True)
+        files_updated, git_log = _pull_repo_changes_from_remote()
+        if not files_updated:
+            print("done")
+        else:
+            print(f"\n{git_log}")
+            raise ValueError("Aborting overwriting repo's dot files due them changing from 'git pull' (Repeat command if overwrite is desired)")
 
     for file_name in file_names_to_sync:
-        print(f" - Overwriting repo's '{file_name}' with local version ... ", end="")
+        print(f" - Updating repo's '{file_name}' from local version ... ", end="", flush=True)
         local_content_bytes = local_files_by_name[file_name].read_bytes()
 
         line_ending_normalization_setting = _ConfigLineEnding(config["lineEnding"]) if "lineEnding" in config else _ConfigLineEnding.NONE
@@ -218,21 +274,46 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
         elif line_ending_normalization_setting == _ConfigLineEnding.CRLF:
             local_content_bytes = local_content_bytes.replace(b"\n", b"\r\n").replace(b"\r\r", b"\r")
 
-        repo_files_by_name[file_name].write_bytes(local_content_bytes)
-        print("Done!")
+        if repo_files_by_name[file_name].read_bytes() == local_content_bytes:
+            print("no changes")
+        else:
+            repo_files_by_name[file_name].write_bytes(local_content_bytes)
+            print("overwritten")
+
+    if arguments.push or arguments.commitOnly:
+        print(" - Committing changes ... ", end="", flush=True)
+        commit_successful, error_message = _commit_dot_file_changes()
+        print("done" if commit_successful else error_message)
+
+    if arguments.push:
+        print(" - Pushing to remote ... ", end="", flush=True)
+        _push_repo_changes_to_remote()
+        print("done")
+
     exit(0)
 
 
 def _command_main_local(arguments: Namespace) -> NoReturn:
     config = _read_config()
-    file_names_to_sync, local_files_by_name, repo_files_by_name = prepare_for_sync(arguments, config)
+
+    if arguments.pull:
+        files_updated, git_log = _pull_repo_changes_from_remote()
+        if files_updated:
+            print(git_log)
+        else:
+            print(" - Repo is up to date")
+
+    file_names_to_sync, local_files_by_name, repo_files_by_name = _prepare_for_sync(arguments, config)
 
     for file_name in file_names_to_sync:
-        print(f" - Overwriting local's '{file_name}' with repository version ... ", end="")
-        local_content_bytes = repo_files_by_name[file_name].read_bytes()
-        local_files_by_name[file_name].write_bytes(local_content_bytes)
-        print("Done!")
+        print(f" - Updating local's '{file_name}' with repository version ... ", end="", flush=True)
+        repo_content_bytes = repo_files_by_name[file_name].read_bytes()
 
+        if local_files_by_name[file_name].read_bytes() == repo_content_bytes:
+            print("no changes")
+        else:
+            local_files_by_name[file_name].write_bytes(repo_content_bytes)
+            print("overwritten")
     exit(0)
 
 

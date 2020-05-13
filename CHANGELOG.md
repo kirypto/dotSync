@@ -11,3 +11,12 @@
 - Added documentation for main program and sub-commands
 
 ---
+
+#### 2020.0.1
+
+- Added Git integration
+   - Added `--pull` flag for `local` sub-command
+   - Added `--push` flag for `repo` sub-command
+   - Added `--commitOnly` flag for `repo` sub-command
+
+---
