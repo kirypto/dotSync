@@ -37,9 +37,11 @@ The script makes use of the following requirements:
 - Python3
 - Python3 packages: `typing`, `pathlib`, `enum`, `argparse`, `sys`
 
-## License
+## Other
 
-See [LICENSE.txt](./LICENSE.txt) for complete details.
+- Licensed under GNU General Public License v3.0. See
+  [LICENSE.txt](./LICENSE.txt) for complete details.
+- Changelog can be found in the [CHANGELOG.md](./CHANGELOG.md) file.
 
 
 
