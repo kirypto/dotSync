@@ -119,7 +119,8 @@ def _parse_program_arguments() -> Namespace:
         usage=f"{parser.prog} config [--list] [--location PATH] [--lineEnding ENDING]",
         formatter_class=RawTextWithDefaultsHelpFormatter
     ).add_mutually_exclusive_group(required=True)
-    config_command_parser.add_argument("--location", metavar="PATH", help="sets the local dot file directory path to synchronize")
+    config_command_parser.add_argument("--localPaths", metavar="PATH",
+                                       help="configures which local directories to examine for matching files when synchronizing (comma delimited)")
     config_command_parser.add_argument("--lineEnding", metavar="ENDING", choices=_ConfigLineEnding.choices(),
                                        help=f"sets what line ending to normalize repo files with: {', '.join(_ConfigLineEnding.choices())}")
     config_command_parser.add_argument("--list", action="store_true", help="display current configuration")
@@ -175,14 +176,15 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
             for key, value in config.items():
                 print(f"{key.ljust(width)} = {value}")
 
-    elif arguments.location:
-        dot_file_location = Path(arguments.location).resolve().absolute()
-        if not dot_file_location.exists():
-            raise ValueError(f"Provided location '{dot_file_location.as_posix()}' does not exist")
-        elif not dot_file_location.is_dir():
-            raise ValueError(f"Provided location '{dot_file_location.as_posix()}' is not a directory")
+    elif arguments.localPaths:
+        local_dot_file_paths = [Path(local_path).resolve().absolute() for local_path in arguments.localPaths.split(",")]
+        for local_dot_file_path in local_dot_file_paths:
+            if not local_dot_file_path.exists():
+                raise ValueError(f"Provided location '{local_dot_file_path.as_posix()}' does not exist")
+            elif not local_dot_file_path.is_dir():
+                raise ValueError(f"Provided location '{local_dot_file_path.as_posix()}' is not a directory")
 
-        config["location"] = dot_file_location.as_posix()
+        config["localPaths"] = ",".join([path.as_posix() for path in local_dot_file_paths])
         _write_config(config)
 
     elif arguments.lineEnding:
@@ -195,7 +197,7 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
 
 
 def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
-    if "location" not in config:
+    if "localPaths" not in config:
         raise ValueError(f"The local dot file location must be configured before synchronization")
 
     dot_files_repo_dir = _get_dot_files_repo_path()
@@ -229,8 +231,10 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
 
     repo_files_by_name: Dict[str, Path] = {path.name: path for name, path in stored_dot_files.items()
                                            if path.name in file_names_to_sync}
-    local_files_by_name: Dict[str, Path] = {path.name: path for path in Path(config["location"]).iterdir()
-                                            if path.name in file_names_to_sync}
+    local_files_by_name: Dict[str, Path] = {}
+    for local_dot_file_dir in [Path(raw_path) for raw_path in config["localPaths"].split(",")]:
+        local_files_by_name.update({path.name: path for path in local_dot_file_dir.iterdir()
+                                    if path.name in file_names_to_sync})
 
     if local_files_by_name.keys() != repo_files_by_name.keys():
         missing_files = ", ".join({f"'{name}'" for name in file_names_to_sync if name not in local_files_by_name.keys()})
