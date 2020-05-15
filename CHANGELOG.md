@@ -23,6 +23,7 @@
 
 #### 2020.0.2
 
+- Changed config property `location` to `localPaths` 
 - Fixed file reading and writing to be relative to the `dotSync.py` install 
   directory instead of wherever the script is run from
 
