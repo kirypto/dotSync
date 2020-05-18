@@ -127,8 +127,20 @@ def _parse_program_arguments() -> Namespace:
     return parser.parse_args()
 
 
+def _get_dot_files_root_dir() -> Path:
+    return Path(__file__).parent
+
+
+def _get_dot_files_repo_path() -> Path:
+    return _get_dot_files_root_dir().joinpath("DotFiles").resolve().absolute()
+
+
+def _get_config_file():
+    return _get_dot_files_root_dir().joinpath("dotSync.properties").resolve().absolute()
+
+
 def _read_config() -> Dict[Text, Text]:
-    config_file_path = Path("dotSync.properties")
+    config_file_path = _get_config_file()
     raw_config = config_file_path.read_text(encoding="UTF-8") if config_file_path.exists() else ""
 
     if "\\\n" in raw_config or "\r\n\\" in raw_config:
@@ -149,8 +161,7 @@ def _write_config(config: Dict[Text, Text]):
 
     raw_config = "\n".join(raw_config_lines)
 
-    config_file_path = Path("dotSync.properties")
-    config_file_path.write_text(raw_config, encoding="UTF-8")
+    _get_config_file().write_text(raw_config, encoding="UTF-8")
 
 
 def _command_main_config(arguments: Namespace) -> NoReturn:
@@ -187,7 +198,7 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
     if "location" not in config:
         raise ValueError(f"The local dot file location must be configured before synchronization")
 
-    dot_files_repo_dir = Path("DotFiles").resolve().absolute()
+    dot_files_repo_dir = _get_dot_files_repo_path()
     if not dot_files_repo_dir.exists():
         raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' does not exist")
     elif not dot_files_repo_dir.is_dir():
@@ -229,18 +240,18 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
 
 
 def _pull_repo_changes_from_remote() -> Tuple[bool, str]:
-    repo = Repo("DotFiles")
+    repo = Repo(_get_dot_files_repo_path())
     pull_result = repo.git.pull()
     return pull_result != "Already up to date.", pull_result
 
 
 def _push_repo_changes_to_remote():
-    repo = Repo("DotFiles")
+    repo = Repo(_get_dot_files_repo_path())
     repo.git.push()
 
 
 def _commit_dot_file_changes() -> Tuple[bool, str]:
-    repo = Repo("DotFiles")
+    repo = Repo(_get_dot_files_repo_path())
     modified_file_list: str = repo.git.ls_files(modified=True)
     if "" == modified_file_list:
         return False, "No changes to commit"
