@@ -23,6 +23,8 @@
 
 #### 2020.0.2
 
+- Added support for multiple local dot file locations via comma delimited `localPaths` config
+- Changed `config` sub-command `--location` to `--localPaths`
 - Changed config property `location` to `localPaths` 
 - Fixed file reading and writing to be relative to the `dotSync.py` install 
   directory instead of wherever the script is run from
