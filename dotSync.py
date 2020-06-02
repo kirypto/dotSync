@@ -128,16 +128,16 @@ def _parse_program_arguments() -> Namespace:
     return parser.parse_args()
 
 
-def _get_dot_files_root_dir() -> Path:
+def _get_dot_sync_root_dir() -> Path:
     return Path(__file__).parent
 
 
 def _get_dot_files_repo_path() -> Path:
-    return _get_dot_files_root_dir().joinpath("DotFiles").resolve().absolute()
+    return _get_dot_sync_root_dir().joinpath("DotFiles").resolve().absolute()
 
 
 def _get_config_file():
-    return _get_dot_files_root_dir().joinpath("dotSync.properties").resolve().absolute()
+    return _get_dot_sync_root_dir().joinpath("dotSync.properties").resolve().absolute()
 
 
 def _read_config() -> Dict[Text, Text]:
