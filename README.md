@@ -20,6 +20,14 @@ with the following implemented commands:
   match the corresponding local files.
 - **`config`**: Used to configure the `dotSync` tool.
 
+## Requirements
+
+The script makes use of the following requirements:
+- Python3
+- Python3 packages: `typing`, `pathlib`, `enum`, `argparse`, `sys`
+- Python3 package `git` from `gitpython` lib. `pip install gitpython` should 
+  work.
+  
 ## Setup
 
 - Create a new folder called `DotFiles` inside the `dotSync` repository root 
@@ -30,14 +38,6 @@ with the following implemented commands:
 - Run the `config` sub-command to specify the location of the local machine's
   configuration files, for example: `dotSync config --location 
   "/path/to/user/home/"`
-
-## Requirements
-
-The script makes use of the following requirements:
-- Python3
-- Python3 packages: `typing`, `pathlib`, `enum`, `argparse`, `sys`
-- Python3 package `git` from `gitpython` lib. `pip install gitpython` should 
-  work.
 
 ## Other
 
