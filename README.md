@@ -36,6 +36,8 @@ with the following implemented commands:
 The script makes use of the following requirements:
 - Python3
 - Python3 packages: `typing`, `pathlib`, `enum`, `argparse`, `sys`
+- Python3 package `git` from `gitpython` lib. `pip install gitpython` should 
+  work.
 
 ## Other
 
