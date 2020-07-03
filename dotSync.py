@@ -122,6 +122,8 @@ def _parse_program_arguments() -> Namespace:
     ).add_mutually_exclusive_group(required=True)
     config_command_parser.add_argument("--localPaths", metavar="PATH",
                                        help="configures which local directories to examine for matching files when synchronizing (comma delimited)")
+    config_command_parser.add_argument("--repositoryPath", metavar="PATH",
+                                       help="configures the location of the git repository containing tracked files to synchronize with")
     config_command_parser.add_argument("--lineEnding", metavar="ENDING", choices=_ConfigLineEnding.choices(),
                                        help=f"sets what line ending to normalize repo files with: {', '.join(_ConfigLineEnding.choices())}")
     config_command_parser.add_argument("--list", action="store_true", help="display current configuration")
@@ -193,6 +195,16 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
 
     elif arguments.lineEnding:
         config["lineEnding"] = _ConfigLineEnding(arguments.lineEnding).value
+        _write_config(config)
+
+    elif arguments.repositoryPath:
+        repository_path = Path(arguments.repositoryPath).resolve().absolute()
+        if not repository_path.exists():
+            raise ValueError(f"Provided location '{repository_path.as_posix()}' does not exist")
+        elif not repository_path.is_dir():
+            raise ValueError(f"Provided location '{repository_path.as_posix()}' is not a directory")
+
+        config["repositoryPath"] = repository_path.as_posix()
         _write_config(config)
 
     else:
