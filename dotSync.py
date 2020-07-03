@@ -85,6 +85,7 @@ class _ConfigLineEnding(Enum):
 
 
 def _parse_program_arguments() -> Namespace:
+    # noinspection PyTypeChecker
     parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
     parser.add_argument("-v", "--version", action="version", help="shows the version and exits",
@@ -132,8 +133,11 @@ def _get_dot_sync_root_dir() -> Path:
     return Path(__file__).parent
 
 
-def _get_dot_files_repo_path() -> Path:
-    return _get_dot_sync_root_dir().joinpath("DotFiles").resolve().absolute()
+def _get_dot_files_repo_path(config: Dict[Text, Text]) -> Path:
+    if "repositoryPath" in config:
+        return Path(config["repositoryPath"]).resolve().absolute()
+    else:
+        return _get_dot_sync_root_dir().joinpath("DotFiles").resolve().absolute()
 
 
 def _get_config_file():
@@ -200,7 +204,7 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
     if "localPaths" not in config:
         raise ValueError(f"The local dot file location must be configured before synchronization")
 
-    dot_files_repo_dir = _get_dot_files_repo_path()
+    dot_files_repo_dir = _get_dot_files_repo_path(config)
     if not dot_files_repo_dir.exists():
         raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' does not exist")
     elif not dot_files_repo_dir.is_dir():
@@ -243,19 +247,19 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
     return file_names_to_sync, local_files_by_name, repo_files_by_name
 
 
-def _pull_repo_changes_from_remote() -> Tuple[bool, str]:
-    repo = Repo(_get_dot_files_repo_path())
+def _pull_repo_changes_from_remote(config: Dict[Text, Text]) -> Tuple[bool, str]:
+    repo = Repo(_get_dot_files_repo_path(config))
     pull_result = repo.git.pull()
     return pull_result != "Already up to date.", pull_result
 
 
-def _push_repo_changes_to_remote():
-    repo = Repo(_get_dot_files_repo_path())
+def _push_repo_changes_to_remote(config: Dict[Text, Text]):
+    repo = Repo(_get_dot_files_repo_path(config))
     repo.git.push()
 
 
-def _commit_dot_file_changes() -> Tuple[bool, str]:
-    repo = Repo(_get_dot_files_repo_path())
+def _commit_dot_file_changes(config: Dict[Text, Text]) -> Tuple[bool, str]:
+    repo = Repo(_get_dot_files_repo_path(config))
     modified_file_list: str = repo.git.ls_files(modified=True)
     if "" == modified_file_list:
         return False, "No changes to commit"
@@ -272,7 +276,7 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
 
     if arguments.push or arguments.commitOnly:
         print(" - Checking remote in case of changes ... ", end="", flush=True)
-        files_updated, git_log = _pull_repo_changes_from_remote()
+        files_updated, git_log = _pull_repo_changes_from_remote(config)
         if not files_updated:
             print("done")
         else:
@@ -297,12 +301,12 @@ def _command_main_repo(arguments: Namespace) -> NoReturn:
 
     if arguments.push or arguments.commitOnly:
         print(" - Committing changes ... ", end="", flush=True)
-        commit_successful, error_message = _commit_dot_file_changes()
+        commit_successful, error_message = _commit_dot_file_changes(config)
         print("done" if commit_successful else error_message)
 
     if arguments.push:
         print(" - Pushing to remote ... ", end="", flush=True)
-        _push_repo_changes_to_remote()
+        _push_repo_changes_to_remote(config)
         print("done")
 
     exit(0)
@@ -312,7 +316,7 @@ def _command_main_local(arguments: Namespace) -> NoReturn:
     config = _read_config()
 
     if arguments.pull:
-        files_updated, git_log = _pull_repo_changes_from_remote()
+        files_updated, git_log = _pull_repo_changes_from_remote(config)
         if files_updated:
             print(git_log)
         else:
