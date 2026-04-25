@@ -23,21 +23,18 @@ with the following implemented commands:
 ## Requirements
 
 The script makes use of the following requirements:
-- Python3
-- Python3 packages: `typing`, `pathlib`, `enum`, `argparse`, `sys`
-- Python3 package `git` from `gitpython` lib. `pip install gitpython` should 
-  work.
+- Python3 (with pip)
+- An existing git repository (with ssh key or other auth setup so it can be fetched / pushed without entering credentials)
   
 ## Setup
 
-- Create a new folder called `DotFiles` inside the `dotSync` repository root 
-  directory. This `DotFiles` folder is where `dotSync.py` will read from and
-  write to when executing, depending on the command run. The `DotFiles` folder
-  is included in the git ignore, and will not affect the `dotSync` project
-  itself.
-- Run the `config` sub-command to specify the location of the local machine's
-  configuration files, for example: `dotSync config --location 
-  "/path/to/user/home/"`
+- Clone this repository.
+- Add the newly cloned directory to your `PATH` environment variable.
+- Make sure `.PY` is in your `PATHEXT` environment variable. This allows `dotsync --help` to function instead of `dotsync.py`.
+- Run `pip install -r .\path\to\dotSync\requirements.txt`.
+- Run `dotsync config --repositoryPath .\path\to\dotFilesRepository`.
+  - Ensure that your dot files repository has configured `user.name` and `user.email`.
+- Run `dotsync config --localPaths "PATHS HERE"`, specifying all directories *containing* the files you want synced as comma separated paths.
 
 ## Other
 
