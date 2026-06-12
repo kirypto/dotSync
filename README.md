@@ -34,7 +34,14 @@ The script makes use of the following requirements:
 - Run `pip install -r .\path\to\dotSync\requirements.txt`.
 - Run `dotsync config --repositoryPath .\path\to\dotFilesRepository`.
   - Ensure that your dot files repository has configured `user.name` and `user.email`.
-- Run `dotsync config --localPaths "PATHS HERE"`, specifying all directories *containing* the files you want synced as comma separated paths.
+- Create an `IDENTIFIER.dotSyncMapping.yaml` file in your dot files repository. For example, `MY-MACHINE.dotSyncMapping.yaml`:
+  ```yaml
+  imports:
+    - shared          # optional: imports shared.dotSyncMapping.yaml first
+  files:
+    my_file.json: ~/path/to/local/my_file.json
+  ```
+- Run `dotsync config --mappingFile IDENTIFIER` to activate the mapping.
 
 ## Other
 

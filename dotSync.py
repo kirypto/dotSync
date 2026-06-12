@@ -22,6 +22,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, NoReturn, Text, Set, List, Tuple
 
+import yaml
+
 from git import Repo, InvalidGitRepositoryError, GitCommandError
 
 from _dotSyncVersion import __version__
@@ -117,13 +119,13 @@ def _parse_program_arguments() -> Namespace:
         f"{_SyncCommand.CONFIG}",
         help=f"sets the configuration of {parser.prog}",
         description=f"sets the configuration of {parser.prog}",
-        usage=f"{parser.prog} config [--list] [--location PATH] [--lineEnding ENDING]",
+        usage=f"{parser.prog} config [--list] [--repositoryPath PATH] [--mappingFile IDENTIFIER] [--lineEnding ENDING]",
         formatter_class=RawTextWithDefaultsHelpFormatter
     ).add_mutually_exclusive_group(required=True)
-    config_command_parser.add_argument("--localPaths", metavar="PATH",
-                                       help="configures which local directories to examine for matching files when synchronizing (comma delimited)")
     config_command_parser.add_argument("--repositoryPath", metavar="PATH",
                                        help="configures the location of the git repository containing tracked files to synchronize with")
+    config_command_parser.add_argument("--mappingFile", metavar="IDENTIFIER",
+                                       help="configures which mapping file (IDENTIFIER.dotSyncMapping.yaml) to use from the repository")
     config_command_parser.add_argument("--lineEnding", metavar="ENDING", choices=_ConfigLineEnding.choices(),
                                        help=f"sets what line ending to normalize repo files with: {', '.join(_ConfigLineEnding.choices())}")
     config_command_parser.add_argument("--list", action="store_true", help="display current configuration")
@@ -175,22 +177,41 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     config = _read_config()
 
     if arguments.list:
+        print("Application Config:")
         if len(config) == 0:
-            print("<EMPTY CONFIG>")
+            print("  <empty>")
         else:
-            width = max([len(key) for key in config.keys()])
+            width = max(len(key) for key in config.keys())
             for key, value in config.items():
-                print(f"{key.ljust(width)} = {value}")
+                print(f"  {key.ljust(width)}: {value}")
 
-    elif arguments.localPaths:
-        local_dot_file_paths = [Path(local_path).resolve().absolute() for local_path in arguments.localPaths.split(",")]
-        for local_dot_file_path in local_dot_file_paths:
-            if not local_dot_file_path.exists():
-                raise ValueError(f"Provided location '{local_dot_file_path.as_posix()}' does not exist")
-            elif not local_dot_file_path.is_dir():
-                raise ValueError(f"Provided location '{local_dot_file_path.as_posix()}' is not a directory")
+        print()
+        print("Resulting Synchronized Files:")
+        if "repositoryPath" not in config or "mappingFile" not in config:
+            print("  <not configured>")
+        else:
+            try:
+                repo_path = _get_dot_files_repo_path(config)
+                mapping = _load_mapping(config["mappingFile"], repo_path)
+                if not mapping:
+                    print("  <no files in mapping>")
+                else:
+                    name_width = max(len(name) for name in mapping.keys())
+                    for repo_name, local_path in mapping.items():
+                        print(f"  {repo_name.ljust(name_width)} -> {local_path.as_posix()}")
+            except Exception as e:
+                print(f"  <error loading mapping: {e}>")
 
-        config["localPaths"] = ",".join([path.as_posix() for path in local_dot_file_paths])
+    elif arguments.mappingFile:
+        if "repositoryPath" not in config:
+            raise ValueError("Set 'repositoryPath' before configuring a mapping file")
+        repo_path = _get_dot_files_repo_path(config)
+        suffix = ".dotSyncMapping.yaml"
+        available = [p.name[:-len(suffix)] for p in repo_path.glob(f"*{suffix}")]
+        if arguments.mappingFile not in available:
+            available_str = ", ".join(f"'{m}'" for m in sorted(available)) if available else "<none found>"
+            raise ValueError(f"Mapping '{arguments.mappingFile}' not found in repository. Available: {available_str}")
+        config["mappingFile"] = arguments.mappingFile
         _write_config(config)
 
     elif arguments.lineEnding:
@@ -203,7 +224,6 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
             raise ValueError(f"Provided location '{repository_path.as_posix()}' does not exist")
         elif not repository_path.is_dir():
             raise ValueError(f"Provided location '{repository_path.as_posix()}' is not a directory")
-
         config["repositoryPath"] = repository_path.as_posix()
         _write_config(config)
 
@@ -212,9 +232,32 @@ def _command_main_config(arguments: Namespace) -> NoReturn:
     exit(0)
 
 
+def _load_mapping(identifier: str, repo_path: Path, visited: Set[str] = None) -> Dict[str, Path]:
+    if visited is None:
+        visited = set()
+    if identifier in visited:
+        return {}
+    visited.add(identifier)
+
+    mapping_file = repo_path / f"{identifier}.dotSyncMapping.yaml"
+    if not mapping_file.exists():
+        raise ValueError(f"Mapping file '{mapping_file.name}' not found in repository")
+
+    data = yaml.safe_load(mapping_file.read_text(encoding="UTF-8")) or {}
+
+    result: Dict[str, Path] = {}
+    for imp in data.get("imports", []):
+        result = {**result, **_load_mapping(imp, repo_path, visited)}
+
+    for repo_name, local_path_str in data.get("files", {}).items():
+        result[repo_name] = Path(local_path_str).expanduser()
+
+    return result
+
+
 def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set[str], Dict[str, Path], Dict[str, Path]]:
-    if "localPaths" not in config:
-        raise ValueError(f"The local dot file location must be configured before synchronization")
+    if "mappingFile" not in config:
+        raise ValueError("A mapping file must be configured before synchronization")
 
     dot_files_repo_dir = _get_dot_files_repo_path(config)
     if not dot_files_repo_dir.exists():
@@ -222,39 +265,31 @@ def _prepare_for_sync(arguments: Namespace, config: Dict[str, str]) -> Tuple[Set
     elif not dot_files_repo_dir.is_dir():
         raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' is not a directory")
     try:
-        Repo(dot_files_repo_dir)
+        dot_files_repo = Repo(dot_files_repo_dir)
+        dot_files_repo.git.config("user.name")
+        dot_files_repo.git.config("user.email")
     except InvalidGitRepositoryError:
         raise ValueError(f"Repository location '{dot_files_repo_dir.as_posix()}' is not a git repository")
-    try:
-        dot_files_repo = Repo(dot_files_repo_dir)
-        dot_files_repo.git.config("user.name")  # Throws exception if not set
-        dot_files_repo.git.config("user.email")  # Throws exception if not set
     except GitCommandError:
         raise ValueError("Repository must configure both 'user.name' and 'user.email'")
 
-    stored_dot_files = {path.name: path for path in dot_files_repo_dir.iterdir()
-                        if path.name != ".git" and path.is_file()}
-    if len(stored_dot_files) == 0:
-        raise ValueError("No files found in the repo to update")
-    file_names_to_sync: Set[str]
+    mapping = _load_mapping(config["mappingFile"], dot_files_repo_dir)
+    if not mapping:
+        raise ValueError("No files found in the mapping to sync")
 
     if arguments.fileName:
-        if arguments.fileName not in stored_dot_files:
-            raise ValueError(f"No stored file matches the name '{arguments.fileName}'")
+        if arguments.fileName not in mapping:
+            raise ValueError(f"No mapping entry matches the name '{arguments.fileName}'")
         file_names_to_sync = {arguments.fileName}
     else:
-        file_names_to_sync = set(stored_dot_files.keys())
+        file_names_to_sync = set(mapping.keys())
 
-    repo_files_by_name: Dict[str, Path] = {path.name: path for name, path in stored_dot_files.items()
-                                           if path.name in file_names_to_sync}
-    local_files_by_name: Dict[str, Path] = {}
-    for local_dot_file_dir in [Path(raw_path) for raw_path in config["localPaths"].split(",")]:
-        local_files_by_name.update({path.name: path for path in local_dot_file_dir.iterdir()
-                                    if path.name in file_names_to_sync})
+    local_files_by_name: Dict[str, Path] = {name: mapping[name] for name in file_names_to_sync}
+    repo_files_by_name: Dict[str, Path] = {name: dot_files_repo_dir / name for name in file_names_to_sync}
 
-    if local_files_by_name.keys() != repo_files_by_name.keys():
-        missing_files = ", ".join({f"'{name}'" for name in file_names_to_sync if name not in local_files_by_name.keys()})
-        raise ValueError(f"Could not find local file(s) matching: {missing_files}")
+    missing_repo = [f"'{name}'" for name in file_names_to_sync if not repo_files_by_name[name].exists()]
+    if missing_repo:
+        raise ValueError(f"Could not find repo file(s): {', '.join(missing_repo)}")
 
     return file_names_to_sync, local_files_by_name, repo_files_by_name
 
@@ -339,11 +374,16 @@ def _command_main_local(arguments: Namespace) -> NoReturn:
     for file_name in file_names_to_sync:
         print(f" - Updating local's '{file_name}' with repository version ... ", end="", flush=True)
         repo_content_bytes = repo_files_by_name[file_name].read_bytes()
+        local_path = local_files_by_name[file_name]
 
-        if local_files_by_name[file_name].read_bytes() == repo_content_bytes:
+        if not local_path.exists():
+            local_path.parent.mkdir(parents=True, exist_ok=True)
+            local_path.write_bytes(repo_content_bytes)
+            print("created")
+        elif local_path.read_bytes() == repo_content_bytes:
             print("no changes")
         else:
-            local_files_by_name[file_name].write_bytes(repo_content_bytes)
+            local_path.write_bytes(repo_content_bytes)
             print("overwritten")
     exit(0)
 

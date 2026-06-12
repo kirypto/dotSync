@@ -2,6 +2,23 @@
 
 ---
 
+#### [Unreleased]
+
+##### Removed
+- `localPaths` config setting replaced by explicit mapping files
+
+##### Added
+- Mapping file system: `IDENTIFIER.dotSyncMapping.yaml` files stored in the dot files repository define explicit `repo filename → local path` entries
+- `imports` key in mapping files to compose shared mappings (depth-first, cycle-safe)
+- `config --mappingFile IDENTIFIER` to activate a mapping, with auto-discovery of available options from the repository
+- `local` sub-command now creates local files that don't exist yet (useful for new machine setup)
+- PyYAML dependency
+
+##### Changed
+- `config --list` now shows resolved file mappings in addition to application config
+
+---
+
 #### 2020.0.0 _(Initial release)_
 
 - Added `dotSync` python program
