@@ -16,6 +16,7 @@
 
 ##### Changed
 - `config --list` now shows resolved file mappings in addition to application config
+- `config --mappingFile` help text now lists available mapping identifiers discovered from the repository
 
 ---
 

@@ -86,7 +86,7 @@ class _ConfigLineEnding(Enum):
         return [ending.value for ending in _ConfigLineEnding]
 
 
-def _parse_program_arguments() -> Namespace:
+def _parse_program_arguments(available_mappings: List[str] = None) -> Namespace:
     # noinspection PyTypeChecker
     parser = UsageOnErrorArgumentParser(formatter_class=RawTextWithDefaultsHelpFormatter)
     parser.usage = f"{parser.prog} [--version] [--help] <command> [<args>]"
@@ -124,8 +124,8 @@ def _parse_program_arguments() -> Namespace:
     ).add_mutually_exclusive_group(required=True)
     config_command_parser.add_argument("--repositoryPath", metavar="PATH",
                                        help="configures the location of the git repository containing tracked files to synchronize with")
-    config_command_parser.add_argument("--mappingFile", metavar="IDENTIFIER",
-                                       help="configures which mapping file (IDENTIFIER.dotSyncMapping.yaml) to use from the repository")
+    mapping_help = f"configures which mapping file to use: {', '.join(sorted(available_mappings))}" if available_mappings else "configures which mapping file to use"
+    config_command_parser.add_argument("--mappingFile", metavar="IDENTIFIER", help=mapping_help)
     config_command_parser.add_argument("--lineEnding", metavar="ENDING", choices=_ConfigLineEnding.choices(),
                                        help=f"sets what line ending to normalize repo files with: {', '.join(_ConfigLineEnding.choices())}")
     config_command_parser.add_argument("--list", action="store_true", help="display current configuration")
@@ -389,7 +389,16 @@ def _command_main_local(arguments: Namespace) -> NoReturn:
 
 
 def _main():
-    arguments = _parse_program_arguments()
+    config = _read_config()
+    available_mappings = []
+    if "repositoryPath" in config:
+        try:
+            suffix = ".dotSyncMapping.yaml"
+            repo_path = _get_dot_files_repo_path(config)
+            available_mappings = [p.name[:-len(suffix)] for p in repo_path.glob(f"*{suffix}")]
+        except Exception:
+            pass
+    arguments = _parse_program_arguments(available_mappings)
 
     command = _SyncCommand(arguments.command)
     if command == _SyncCommand.CONFIG:
